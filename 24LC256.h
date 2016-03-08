@@ -19,12 +19,12 @@
 #define ROZMIAR_STRONY 64
 
 typedef struct tEEPROM_DANE {
-    Probka   bierzacaProbka[ILOSC_PROBEK_NA_STRONE];
+    Probka   biezacaProbka[ILOSC_PROBEK_NA_STRONE];
     uint8_t  dopelnienie; //dopelnienie do 64 bajtow, 1 strona w 24lc256 ma 64 bajty
 
 } EEPROM_DANE;
 
-//struktura bierzacych probek
+//struktura biezacych probek
 EEPROM_DANE eeprom_dane;
 
 // prototype local functions

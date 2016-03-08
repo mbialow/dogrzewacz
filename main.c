@@ -40,7 +40,7 @@ inline void timer_init();
 
 //zapisna pelna strona w 24lc256
 uint16_t EEMEM indeksZapisanychStron = 0;
-volatile uint16_t indeksBierzacejStrony;
+volatile uint16_t indeksBiezacejStrony;
 
 
 ParametryPracy EEMEM parametryPracyEEPROM = {
@@ -66,7 +66,7 @@ ParametryPracy EEMEM parametryPracyEEPROM = {
 
 volatile ParametryPracy parametryPracy;
 
-volatile uint8_t indeksBierzacejProbki;
+volatile uint8_t indeksBiezacejProbki;
 volatile time_t  czasZebraniaOstatniejProbki;
 
 volatile uint8_t flagaInicjalizacji 	__attribute__((section(".noinit")));
@@ -147,17 +147,17 @@ void zapis_parametrow() {
         interwal = parametryPracy.INTERWAL_ZAPISU_PROBEK_PRACA;
     }
 
-    if (diff >= interwal && indeksBierzacejStrony < ILOSC_STRON) {
+    if (diff >= interwal && indeksBiezacejStrony < ILOSC_STRON) {
 
         czasZebraniaOstatniejProbki = time_;
 
-       // memcpy((void *)&stanUkladu, &eeprom_dane.bierzacaProbka[indeksBierzacejProbki], 3);
-        eeprom_dane.bierzacaProbka[indeksBierzacejProbki].czasPomiaru = time_;
-        eeprom_dane.bierzacaProbka[indeksBierzacejProbki].napiecieAkumulatora = stanUkladu.napiecieAkumulatora;
-        eeprom_dane.bierzacaProbka[indeksBierzacejProbki].temperaturaZewnetrzna = stanUkladu.temperaturaZewnetrzna;
-        eeprom_dane.bierzacaProbka[indeksBierzacejProbki].temperaturaCieczyChlodzacej = stanUkladu.temperaturaCieczyChlodzacej;
+       // memcpy((void *)&stanUkladu, &eeprom_dane.biezacaProbka[indeksBiezacejProbki], 3);
+        eeprom_dane.biezacaProbka[indeksBiezacejProbki].czasPomiaru = time_;
+        eeprom_dane.biezacaProbka[indeksBiezacejProbki].napiecieAkumulatora = stanUkladu.napiecieAkumulatora;
+        eeprom_dane.biezacaProbka[indeksBiezacejProbki].temperaturaZewnetrzna = stanUkladu.temperaturaZewnetrzna;
+        eeprom_dane.biezacaProbka[indeksBiezacejProbki].temperaturaCieczyChlodzacej = stanUkladu.temperaturaCieczyChlodzacej;
 
-        indeksBierzacejProbki++;
+        indeksBiezacejProbki++;
 
 #ifdef DEBUG_INFO
 
@@ -167,20 +167,20 @@ void zapis_parametrow() {
 
     }
 
-    if (indeksBierzacejProbki > ILOSC_PROBEK_NA_STRONE - 1) {
-        write_eeprom(indeksBierzacejStrony * ROZMIAR_STRONY, &eeprom_dane);
-        indeksBierzacejStrony++;
-        indeksBierzacejProbki = 0;
+    if (indeksBiezacejProbki > ILOSC_PROBEK_NA_STRONE - 1) {
+        write_eeprom(indeksBiezacejStrony * ROZMIAR_STRONY, &eeprom_dane);
+        indeksBiezacejStrony++;
+        indeksBiezacejProbki = 0;
 
 #ifdef DEBUG_INFO1
         uart_puts_P("Zapis do EEPROM\n");
 #endif
 
-        eeprom_update_word(&indeksZapisanychStron, indeksBierzacejStrony);
+        eeprom_update_word(&indeksZapisanychStron, indeksBiezacejStrony);
 
         //przekroczony zakres stron zapisujemy od 0
-        if (indeksBierzacejStrony >= ILOSC_STRON) {
-            indeksBierzacejStrony = 0;
+        if (indeksBiezacejStrony >= ILOSC_STRON) {
+            indeksBiezacejStrony = 0;
         }
 
     }
@@ -194,20 +194,20 @@ void wyswietl_probki() {
     char buforUARTTmp[100];
 
 
-    sprintf_P(buforUARTTmp, PSTR("ilosc probek=%d\n"), indeksBierzacejStrony * ILOSC_PROBEK_NA_STRONE);
+    sprintf_P(buforUARTTmp, PSTR("ilosc probek=%d\n"), indeksBiezacejStrony * ILOSC_PROBEK_NA_STRONE);
     uart_puts(buforUARTTmp);
 
-    for (uint16_t strona = 0; strona < indeksBierzacejStrony; strona++) {
+    for (uint16_t strona = 0; strona < indeksBiezacejStrony; strona++) {
 
         temp = read_eeprom(strona * ROZMIAR_STRONY);
 
         for (uint8_t i = 0; i < ILOSC_PROBEK_NA_STRONE; i++) {
 
-            char *czasBufor = ctime(&temp->bierzacaProbka[i].czasPomiaru);
+            char *czasBufor = ctime(&temp->biezacaProbka[i].czasPomiaru);
             sprintf_P(buforUARTTmp, PSTR("tc[C]: %d tz[C]: %d n[V]: %d T: %s\n"),
-                temp->bierzacaProbka[i].temperaturaCieczyChlodzacej,
-                temp->bierzacaProbka[i].temperaturaZewnetrzna,
-                temp->bierzacaProbka[i].napiecieAkumulatora,
+                temp->biezacaProbka[i].temperaturaCieczyChlodzacej,
+                temp->biezacaProbka[i].temperaturaZewnetrzna,
+                temp->biezacaProbka[i].napiecieAkumulatora,
                 czasBufor
                );
 
@@ -299,7 +299,7 @@ void obsluga_uart() {
 
 void OBSLUGA_PARAMETROWf() {
 
-    stanUkladu.bierzacyStan = ODCZYT_NAPIECIA;
+    stanUkladu.biezacyStan = ODCZYT_NAPIECIA;
 
     zapis_parametrow();
     obsluga_uart();
@@ -321,26 +321,26 @@ void USPIJf() {
         sleep_disable();
     }
 
-    stanUkladu.bierzacyStan = OBSLUGA_PARAMETROW;
+    stanUkladu.biezacyStan = OBSLUGA_PARAMETROW;
 }
 
 void ODCZYT_NAPIECIAf() {
 
-    stanUkladu.bierzacyStan = USPIJ;
+    stanUkladu.biezacyStan = USPIJ;
 
     if (stanUkladu.napiecieAkumulatora > parametryPracy.NAPIECIE_PRACY && stanUkladu.momentWlaczeniaSilnika == 0) {
         stanUkladu.momentWlaczeniaSilnika = stanUkladu.sekundaPracyUkladu;
     }else if (stanUkladu.napiecieAkumulatora > parametryPracy.NAPIECIE_PRACY && stanUkladu.momentWlaczeniaSilnika > 0) {
-        stanUkladu.bierzacyStan = OBSLUGA_TEMP_CIECZY_CHLODZACEJ;
+        stanUkladu.biezacyStan = OBSLUGA_TEMP_CIECZY_CHLODZACEJ;
     }else if (stanUkladu.napiecieAkumulatora < parametryPracy.NAPIECIE_PRACY && stanUkladu.momentWlaczeniaGrzalek > 0) {
-        stanUkladu.bierzacyStan = WARUNEK_KONCA_PRACY;
+        stanUkladu.biezacyStan = WARUNEK_KONCA_PRACY;
     }
 
 }
 
 void OBSLUGA_TEMP_CIECZY_CHLODZACEJf() {
 
-     stanUkladu.bierzacyStan = WARUNEK_PRACY_PRZEKAZNIK_1;
+     stanUkladu.biezacyStan = WARUNEK_PRACY_PRZEKAZNIK_1;
 
     //odczyt temperatury po konwersji
     if (!DS18X20_IsInProgress() && DS18X20_OK == DS18X20_ReadTemperature()) {
@@ -364,7 +364,7 @@ void OBSLUGA_TEMP_CIECZY_CHLODZACEJf() {
 
 void WARUNEK_PRACY_PRZEKAZNIK_1f() {
 
-    stanUkladu.bierzacyStan = WARUNEK_KONCA_PRACY;
+    stanUkladu.biezacyStan = WARUNEK_KONCA_PRACY;
 
     //weryfikacja czy dogrzewanie jest wylaczone
     if (stanUkladu.momentWlaczeniaGrzalek == 0
@@ -391,7 +391,7 @@ void WARUNEK_PRACY_PRZEKAZNIK_1f() {
                 debugInfo(("zalacz_p1"));
 #endif
                 zalacz_przekaznik_1();
-                stanUkladu.bierzacyStan = WARUNEK_PRACY_PRZEKAZNIK_2;
+                stanUkladu.biezacyStan = WARUNEK_PRACY_PRZEKAZNIK_2;
 
             }
         }
@@ -410,13 +410,13 @@ void WARUNEK_PRACY_PRZEKAZNIK_2f() {
 
     }
 
-    stanUkladu.bierzacyStan = WARUNEK_KONCA_PRACY;
+    stanUkladu.biezacyStan = WARUNEK_KONCA_PRACY;
 
 }
 
 void WARUNEK_KONCA_PRACYf() {
 
-    stanUkladu.bierzacyStan = OBSLUGA_PARAMETROW;
+    stanUkladu.biezacyStan = OBSLUGA_PARAMETROW;
 
     //weryfikacja czy dogrzewanie wlaczone
     if (stanUkladu.momentWlaczeniaGrzalek > 0) {
@@ -437,7 +437,7 @@ void WARUNEK_KONCA_PRACYf() {
 #endif
 
 				wylacz_przekazniki();
-				stanUkladu.bierzacyStan = USPIJ;
+				stanUkladu.biezacyStan = USPIJ;
 
         }
     }
@@ -447,12 +447,12 @@ void WARUNEK_KONCA_PRACYf() {
 
 inline void param_init() {
 
-    indeksBierzacejStrony = eeprom_read_word(&indeksZapisanychStron);
+    indeksBiezacejStrony = eeprom_read_word(&indeksZapisanychStron);
     eeprom_read_block((void *)&parametryPracy, &parametryPracyEEPROM, sizeof(ParametryPracy));
 
     //ustaw domyslne parametry
     memset((void *)&stanUkladu, 0x00, sizeof(StanUkladu));
-    stanUkladu.bierzacyStan = OBSLUGA_PARAMETROW;
+    stanUkladu.biezacyStan = OBSLUGA_PARAMETROW;
 
     if(flagaInicjalizacji != 119) {
         struct tm rtc_time;
@@ -493,7 +493,7 @@ int main(void) {
 #ifdef DEBUG_INFO
 
     char buforUARTTmp[25];
-    sprintf_P(buforUARTTmp, PSTR("index strony %d \n"), indeksBierzacejStrony);
+    sprintf_P(buforUARTTmp, PSTR("index strony %d \n"), indeksBiezacejStrony);
     uart_puts(buforUARTTmp);
 
 #endif
@@ -510,7 +510,7 @@ int main(void) {
 
         wdt_reset();
 
-        int8_t indexFunStanu = daj_funkcje_stanu(stanUkladu.bierzacyStan);
+        int8_t indexFunStanu = daj_funkcje_stanu(stanUkladu.biezacyStan);
         if (indexFunStanu != -1) {
             tablicaStanow[indexFunStanu].wykonajStan();
         }

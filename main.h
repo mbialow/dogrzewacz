@@ -67,7 +67,7 @@ typedef struct tStanUkladu {
     uint16_t     momentWlaczeniaSilnika;
     uint16_t	 momentWlaczeniaGrzalek;
 
-    Stan         bierzacyStan;
+    Stan         biezacyStan;
 
     time_t       czasWylaczeniaDogrzewania;
 
