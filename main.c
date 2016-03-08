@@ -39,8 +39,32 @@ inline void timer_init();
 
 
 //zapisna pelna strona w 24lc256
-uint16_t EEMEM indeksZapisanychStron;
+uint16_t EEMEM indeksZapisanychStron = 0;
 volatile uint16_t indeksBierzacejStrony;
+
+
+ParametryPracy EEMEM parametryPracyEEPROM = {
+
+		.CZAS_PRACY_GRZALEK_SEKUNDY = 60 * 3, //(60 s * 5 minut)
+		.CZAS_PRACY_SILNIKA_SEKUNDY = 10, //po 10 sekundach od wzrostu napiecia mozemy weryfikowac warunki wlaczenia dogrzewania
+
+		.CZAS_ZWLOKI_POMIEDZY_KOLEJNYM_WLACZENIEM_DOGRZEWANIA_SEKUNDY = 60 * 60,
+		.CZAS_PRACY_DO_USPIENIA_SEKUNDY = 2,
+
+		.INTERWAL_ZAPISU_PROBEK_SPOCZYNEK = 60 * 60 * 3, //co 3h
+		.INTERWAL_ZAPISU_PROBEK_PRACA = 60, //co minute
+
+		.NAPIECIE_PRACY = 120, //133 = 13,3v powyzej uklad weryfikuje pozostale warunki
+
+		.TEMPERATURA_WYLACZENIE_DOGRZEWANIA = 65, //temperatura cieczy chlodzacej po osiagnieciu ktorej wylaczy sie dogrzewanie
+		.TEMERATURA_ZEWNETRZNA_WLACZENIA_PRZEKAZNIK_1 = 5, //ponizej 5 stopni mozemy wlaczyc dogrzewanie
+		.TEMERATURA_ZEWNETRZNA_WLACZENIA_PRZEKAZNIK_2 = -7 // ponizej -7 wlaczmy przekazniki 2
+
+		};
+
+
+
+volatile ParametryPracy parametryPracy;
 
 volatile uint8_t indeksBierzacejProbki;
 volatile time_t  czasZebraniaOstatniejProbki;
@@ -55,7 +79,7 @@ time_t RTC_time  		 	    __attribute__((section(".noinit")));
  * ISR  - START
  */
 
-ISR(TIMER1_COMPB_vect){
+ISR(TIMER1_COMPB_vect) {
     ++stanUkladu.sekundaPracyUkladu;
     ADCSRA |= (1 << ADSC);
 }
@@ -78,7 +102,6 @@ inline void timer_init() {
     // Mode 4, CTC on OCR1B
     TIMSK1 |= (1 << OCIE1B);
     //TIMSK1 |= (1 << OCIE1A);
-
 
     //prescaler 64
     TCCR1B |= (1 << CS11) | (1 << CS10);
@@ -118,16 +141,17 @@ void zapis_parametrow() {
     const time_t time_ = time(&RTC_time);
     const uint16_t diff = difftime(time_, czasZebraniaOstatniejProbki);
 
-    uint16_t interwal = INTERWAL_ZAPISU_PROBEK_SPOCZYNEK;
+    uint16_t interwal = parametryPracy.INTERWAL_ZAPISU_PROBEK_SPOCZYNEK;
 
     if (stanUkladu.momentWlaczeniaGrzalek > 0) {
-        interwal = INTERWAL_ZAPISU_PROBEK_PRACA;
+        interwal = parametryPracy.INTERWAL_ZAPISU_PROBEK_PRACA;
     }
 
     if (diff >= interwal && indeksBierzacejStrony < ILOSC_STRON) {
 
         czasZebraniaOstatniejProbki = time_;
 
+       // memcpy((void *)&stanUkladu, &eeprom_dane.bierzacaProbka[indeksBierzacejProbki], 3);
         eeprom_dane.bierzacaProbka[indeksBierzacejProbki].czasPomiaru = time_;
         eeprom_dane.bierzacaProbka[indeksBierzacejProbki].napiecieAkumulatora = stanUkladu.napiecieAkumulatora;
         eeprom_dane.bierzacaProbka[indeksBierzacejProbki].temperaturaZewnetrzna = stanUkladu.temperaturaZewnetrzna;
@@ -137,26 +161,25 @@ void zapis_parametrow() {
 
 #ifdef DEBUG_INFO
 
-        debugInfo("co_interwal");
+        debugInfo(("co_interwal"));
 
 #endif
 
     }
 
     if (indeksBierzacejProbki > ILOSC_PROBEK_NA_STRONE - 1) {
-
         write_eeprom(indeksBierzacejStrony * ROZMIAR_STRONY, &eeprom_dane);
         indeksBierzacejStrony++;
         indeksBierzacejProbki = 0;
 
-#ifdef DEBUG_INFO
-        uart_puts("Zapis do EEPROM\n");
+#ifdef DEBUG_INFO1
+        uart_puts_P("Zapis do EEPROM\n");
 #endif
 
         eeprom_update_word(&indeksZapisanychStron, indeksBierzacejStrony);
 
         //przekroczony zakres stron zapisujemy od 0
-        if (indeksBierzacejStrony >=ILOSC_STRON) {
+        if (indeksBierzacejStrony >= ILOSC_STRON) {
             indeksBierzacejStrony = 0;
         }
 
@@ -167,8 +190,12 @@ void zapis_parametrow() {
 
 void wyswietl_probki() {
 
-    EEPROM_DANE temp;
+    EEPROM_DANE *temp;
     char buforUARTTmp[100];
+
+
+    sprintf_P(buforUARTTmp, PSTR("ilosc probek=%d\n"), indeksBierzacejStrony * ILOSC_PROBEK_NA_STRONE);
+    uart_puts(buforUARTTmp);
 
     for (uint16_t strona = 0; strona < indeksBierzacejStrony; strona++) {
 
@@ -176,11 +203,11 @@ void wyswietl_probki() {
 
         for (uint8_t i = 0; i < ILOSC_PROBEK_NA_STRONE; i++) {
 
-            char *czasBufor = ctime(&temp.bierzacaProbka[i].czasPomiaru);
+            char *czasBufor = ctime(&temp->bierzacaProbka[i].czasPomiaru);
             sprintf_P(buforUARTTmp, PSTR("tc[C]: %d tz[C]: %d n[V]: %d T: %s\n"),
-                temp.bierzacaProbka[i].temperaturaCieczyChlodzacej,
-                temp.bierzacaProbka[i].temperaturaZewnetrzna,
-                temp.bierzacaProbka[i].napiecieAkumulatora,
+                temp->bierzacaProbka[i].temperaturaCieczyChlodzacej,
+                temp->bierzacaProbka[i].temperaturaZewnetrzna,
+                temp->bierzacaProbka[i].napiecieAkumulatora,
                 czasBufor
                );
 
@@ -188,6 +215,8 @@ void wyswietl_probki() {
             wdt_reset();
         }
     }
+    //poczekaj az uart zakonczy wysylke
+    _delay_ms(100);
 }
 
 
@@ -229,6 +258,36 @@ void obsluga_uart() {
 
 		} else if (strncmp(command, "stan", 4) == 0) {
 			debugInfo("stan");
+
+		} else if (strncmp(command, "param", 5) == 0) {
+			char buforUARTTmp[450];
+
+			sprintf_P(buforUARTTmp,
+					   PSTR("--- Parametry pracy ---\n"
+							"czas pracy grzalek [s]: %d\n"
+							"czas pracy silnika [s]: %d\n"
+							"interwal zapisu probek spoczynek [s]: %d\n"
+							"interwal zapisu probek praca [s]: %d\n"
+							"czas zwloki pomiedzy kolejnym wlaczeniem dogrzewania [s]: %d\n"
+							"czas pracy do uspienia [s]: %d\n"
+							"napiecie pracy np. 123 = 12,3 [V]: %d\n"
+							"temperatura wylaczenie dogrzewania [C]: %d\n"
+							"temeratura zew. wla. przek 1 [C]: %d\n"
+							"temeratura zew. wla. przek 2 [C]: %d\n"
+						),
+						parametryPracy.CZAS_PRACY_GRZALEK_SEKUNDY,
+						parametryPracy.CZAS_PRACY_SILNIKA_SEKUNDY,
+						parametryPracy.INTERWAL_ZAPISU_PROBEK_SPOCZYNEK,
+						parametryPracy.INTERWAL_ZAPISU_PROBEK_PRACA,
+						parametryPracy.CZAS_ZWLOKI_POMIEDZY_KOLEJNYM_WLACZENIEM_DOGRZEWANIA_SEKUNDY,
+						parametryPracy.CZAS_PRACY_DO_USPIENIA_SEKUNDY,
+						parametryPracy.NAPIECIE_PRACY,
+						parametryPracy.TEMPERATURA_WYLACZENIE_DOGRZEWANIA,
+						parametryPracy.TEMERATURA_ZEWNETRZNA_WLACZENIA_PRZEKAZNIK_1,
+						parametryPracy.TEMERATURA_ZEWNETRZNA_WLACZENIA_PRZEKAZNIK_2
+
+			);
+			uart_puts(buforUARTTmp);
 		}
 
 		uart_puts_P("\n");
@@ -249,7 +308,7 @@ void OBSLUGA_PARAMETROWf() {
 
 void USPIJf() {
 
-    if (stanUkladu.sekundaPracyUkladu > CZAS_PRACY_DO_USPIENIA_SEKUNDY) {
+    if (stanUkladu.sekundaPracyUkladu > parametryPracy.CZAS_PRACY_DO_USPIENIA_SEKUNDY) {
 
         sleep_enable();
         stanUkladu.sekundaPracyUkladu = 0;
@@ -269,11 +328,11 @@ void ODCZYT_NAPIECIAf() {
 
     stanUkladu.bierzacyStan = USPIJ;
 
-    if (stanUkladu.napiecieAkumulatora > NAPIECIE_PRACY && stanUkladu.momentWlaczeniaSilnika == 0) {
+    if (stanUkladu.napiecieAkumulatora > parametryPracy.NAPIECIE_PRACY && stanUkladu.momentWlaczeniaSilnika == 0) {
         stanUkladu.momentWlaczeniaSilnika = stanUkladu.sekundaPracyUkladu;
-    }else if (stanUkladu.napiecieAkumulatora > NAPIECIE_PRACY && stanUkladu.momentWlaczeniaSilnika > 0) {
+    }else if (stanUkladu.napiecieAkumulatora > parametryPracy.NAPIECIE_PRACY && stanUkladu.momentWlaczeniaSilnika > 0) {
         stanUkladu.bierzacyStan = OBSLUGA_TEMP_CIECZY_CHLODZACEJ;
-    }else if (stanUkladu.napiecieAkumulatora < NAPIECIE_PRACY && stanUkladu.momentWlaczeniaGrzalek > 0) {
+    }else if (stanUkladu.napiecieAkumulatora < parametryPracy.NAPIECIE_PRACY && stanUkladu.momentWlaczeniaGrzalek > 0) {
         stanUkladu.bierzacyStan = WARUNEK_KONCA_PRACY;
     }
 
@@ -309,7 +368,7 @@ void WARUNEK_PRACY_PRZEKAZNIK_1f() {
 
     //weryfikacja czy dogrzewanie jest wylaczone
     if (stanUkladu.momentWlaczeniaGrzalek == 0
-            && (stanUkladu.sekundaPracyUkladu - stanUkladu.momentWlaczeniaSilnika) > CZAS_PRACY_SILNIKA_SEKUNDY) {
+            && (stanUkladu.sekundaPracyUkladu - stanUkladu.momentWlaczeniaSilnika) > parametryPracy.CZAS_PRACY_SILNIKA_SEKUNDY) {
 
         uint16_t uplywCzasuOdPoprzedniegoWylaczenia = 0;
 
@@ -319,17 +378,17 @@ void WARUNEK_PRACY_PRZEKAZNIK_1f() {
 
         //weryfikacja czy mozna ponownie wlaczyc dogrzewanie
         if (stanUkladu.czasWylaczeniaDogrzewania == 0 || (stanUkladu.czasWylaczeniaDogrzewania != 0
-                  && uplywCzasuOdPoprzedniegoWylaczenia > CZAS_ZWLOKI_POMIEDZY_KOLEJNYM_WLACZENIEM_DOGRZEWANIA_SEKUNDY)) {
+                  && uplywCzasuOdPoprzedniegoWylaczenia > parametryPracy.CZAS_ZWLOKI_POMIEDZY_KOLEJNYM_WLACZENIEM_DOGRZEWANIA_SEKUNDY)) {
 
         	//warunek temperatury
-            if (stanUkladu.temperaturaZewnetrzna <= TEMERATURA_ZEWNETRZNA_WLACZENIA_PRZEKAZNIK_1
-                    && stanUkladu.temperaturaCieczyChlodzacej < TEMPERATURA_WYLACZENIE_DOGRZEWANIA) {
+            if (stanUkladu.temperaturaZewnetrzna <= parametryPracy.TEMERATURA_ZEWNETRZNA_WLACZENIA_PRZEKAZNIK_1
+                    && stanUkladu.temperaturaCieczyChlodzacej < parametryPracy.TEMPERATURA_WYLACZENIE_DOGRZEWANIA) {
 
                 stanUkladu.czasWylaczeniaDogrzewania = 0;
                 stanUkladu.momentWlaczeniaGrzalek = stanUkladu.sekundaPracyUkladu;
 
 #ifdef DEBUG_INFO
-                debugInfo("zalacz_p1");
+                debugInfo(("zalacz_p1"));
 #endif
                 zalacz_przekaznik_1();
                 stanUkladu.bierzacyStan = WARUNEK_PRACY_PRZEKAZNIK_2;
@@ -342,10 +401,10 @@ void WARUNEK_PRACY_PRZEKAZNIK_1f() {
 
 void WARUNEK_PRACY_PRZEKAZNIK_2f() {
 
-    if (stanUkladu.temperaturaZewnetrzna <= TEMERATURA_ZEWNETRZNA_WLACZENIA_PRZEKAZNIK_2) {
+    if (stanUkladu.temperaturaZewnetrzna <= parametryPracy.TEMERATURA_ZEWNETRZNA_WLACZENIA_PRZEKAZNIK_2) {
 
 #ifdef DEBUG_INFO
-        debugInfo("zalacz_p2");
+        debugInfo(("zalacz_p2"));
 #endif
         zalacz_przekaznik_2();
 
@@ -362,17 +421,19 @@ void WARUNEK_KONCA_PRACYf() {
     //weryfikacja czy dogrzewanie wlaczone
     if (stanUkladu.momentWlaczeniaGrzalek > 0) {
 
-        if (stanUkladu.napiecieAkumulatora < NAPIECIE_PRACY
-            || stanUkladu.temperaturaCieczyChlodzacej >= TEMPERATURA_WYLACZENIE_DOGRZEWANIA
-            || (stanUkladu.sekundaPracyUkladu - stanUkladu.momentWlaczeniaGrzalek) >= CZAS_PRACY_GRZALEK_SEKUNDY) {
+        if (stanUkladu.napiecieAkumulatora < parametryPracy.NAPIECIE_PRACY
+            || stanUkladu.temperaturaCieczyChlodzacej >= parametryPracy.TEMPERATURA_WYLACZENIE_DOGRZEWANIA
+            || (stanUkladu.sekundaPracyUkladu - stanUkladu.momentWlaczeniaGrzalek) >= parametryPracy.CZAS_PRACY_GRZALEK_SEKUNDY) {
 
 				stanUkladu.momentWlaczeniaGrzalek = 0;
 				stanUkladu.momentWlaczeniaSilnika = 0;
 				stanUkladu.sekundaPracyUkladu = 0;
 				stanUkladu.czasWylaczeniaDogrzewania = time(&RTC_time);
+				//nie bedzie zasmiecalo danych
+				stanUkladu.temperaturaCieczyChlodzacej = 0;
 
 #ifdef DEBUG_INFO
-				debugInfo("koniec_pracy");
+				debugInfo(("koniec_pracy"));
 #endif
 
 				wylacz_przekazniki();
@@ -387,6 +448,7 @@ void WARUNEK_KONCA_PRACYf() {
 inline void param_init() {
 
     indeksBierzacejStrony = eeprom_read_word(&indeksZapisanychStron);
+    eeprom_read_block((void *)&parametryPracy, &parametryPracyEEPROM, sizeof(ParametryPracy));
 
     //ustaw domyslne parametry
     memset((void *)&stanUkladu, 0x00, sizeof(StanUkladu));
@@ -430,11 +492,8 @@ int main(void) {
 
 #ifdef DEBUG_INFO
 
-    uart_puts_P("rst\n");
-    char buforUARTTmp[15];
-
+    char buforUARTTmp[25];
     sprintf_P(buforUARTTmp, PSTR("index strony %d \n"), indeksBierzacejStrony);
-
     uart_puts(buforUARTTmp);
 
 #endif

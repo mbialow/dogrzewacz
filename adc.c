@@ -38,7 +38,7 @@ inline void procesujRezultatADC() {
         }
 
 #ifdef DEBUG_ADC_INFO
-      sprintf_P(buforUARTTmp, PSTR("tz[C]: %ld\n"), result);
+        sprintf_P(buforUARTTmp, PSTR("tz[C]: %ld\n"), result);
 #endif
 
     } else {
@@ -51,7 +51,7 @@ inline void procesujRezultatADC() {
     }
 
 #ifdef DEBUG_ADC_INFO
-    uart_puts(buforUARTTmp);
+        uart_puts(buforUARTTmp);
 #endif
 
 

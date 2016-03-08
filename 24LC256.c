@@ -60,11 +60,11 @@ void eeprom_init() {
 
 }
 
-EEPROM_DANE read_eeprom(uint16_t memory_address) {
+EEPROM_DANE* read_eeprom(uint16_t memory_address) {
     // send 'set memory address' command to eeprom and then read data
     while(TWI_busy);
     p_set_eeprom_address->high_byte = memory_address >> 8;
-    p_set_eeprom_address->low_byte = memory_address & 0x0F;
+    p_set_eeprom_address->low_byte = memory_address;
     TWI_master_start_write_then_read(   EEPROM_DEVICE_ID,               // device address of eeprom chip
                                         sizeof(SET_EEPROM_ADDRESS),     // number of bytes to write
                                         sizeof(EEPROM_DANE)             // number of bytes to read
@@ -73,14 +73,14 @@ EEPROM_DANE read_eeprom(uint16_t memory_address) {
     // nothing else to do - wait for the data
     while(TWI_busy);
     // return the data
-    return(p_read_eeprom->eeprom_dane);
+    return(&p_read_eeprom->eeprom_dane);
 }
 
 // write eeprom - note: page boundaries are not considered in this example
 void write_eeprom(uint16_t memory_address, EEPROM_DANE *w_data) {
     while(TWI_busy);
     p_write_eeprom->high_byte = memory_address >> 8;
-    p_write_eeprom->low_byte = memory_address & 0x0F;
+    p_write_eeprom->low_byte = memory_address;
     p_write_eeprom->eeprom_dane = *w_data;
     TWI_master_start_write(     EEPROM_DEVICE_ID,       // device address of eeprom chip
                                 sizeof(WRITE_EEPROM)    // number of bytes to write

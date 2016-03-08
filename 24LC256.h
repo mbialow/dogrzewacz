@@ -24,12 +24,12 @@ typedef struct tEEPROM_DANE {
 
 } EEPROM_DANE;
 
-//struktora bierzacych probek
+//struktura bierzacych probek
 EEPROM_DANE eeprom_dane;
 
 // prototype local functions
 void eeprom_init();
-EEPROM_DANE read_eeprom(uint16_t memory_address);
+EEPROM_DANE* read_eeprom(uint16_t memory_address);
 void write_eeprom(uint16_t memory_address, EEPROM_DANE *w_data);
 
 
